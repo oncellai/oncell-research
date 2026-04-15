@@ -52,16 +52,66 @@ export default function Research() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, session_id: sessionId }),
       });
-      const data = await res.json();
 
-      if (data.error) {
+      if (!res.ok) {
         setMessages((prev) => [...prev, { role: "assistant", content: "Something went wrong. Please try again." }]);
+        setLoading(false);
+        return;
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+
+      if (contentType.includes("text/event-stream") && res.body) {
+        // Streaming response
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let assistantIndex = -1;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === "sources") {
+                // Add assistant message with sources, empty content
+                setMessages((prev) => {
+                  assistantIndex = prev.length;
+                  return [...prev, { role: "assistant", content: "", sources: data.sources }];
+                });
+                setLoading(false);
+              } else if (data.type === "text") {
+                // Append text to the assistant message
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  if (assistantIndex >= 0 && updated[assistantIndex]) {
+                    updated[assistantIndex] = {
+                      ...updated[assistantIndex],
+                      content: updated[assistantIndex].content + data.content,
+                    };
+                  }
+                  return updated;
+                });
+              }
+            } catch {
+              // skip
+            }
+          }
+        }
       } else {
-        setMessages((prev) => [...prev, {
-          role: "assistant",
-          content: data.answer,
-          sources: data.sources,
-        }]);
+        // Non-streaming fallback
+        const data = await res.json();
+        if (data.error) {
+          setMessages((prev) => [...prev, { role: "assistant", content: "Something went wrong. Please try again." }]);
+        } else {
+          setMessages((prev) => [...prev, { role: "assistant", content: data.answer, sources: data.sources }]);
+        }
       }
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Connection error. Please try again." }]);
@@ -79,6 +129,7 @@ export default function Research() {
   }
 
   function renderMarkdown(text: string) {
+    if (!text) return "";
     return text
       .replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) =>
         `<pre style="background:rgba(255,255,255,0.04);padding:12px 14px;border-radius:8px;margin:8px 0;font-size:12px;overflow-x:auto;border:1px solid var(--border)"><code>${code.trim()}</code></pre>`
