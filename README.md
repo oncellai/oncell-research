@@ -4,6 +4,10 @@ Search the web, synthesize answers, cite sources. Like Perplexity — but open s
 
 Built with [Next.js](https://nextjs.org) and [OnCell](https://oncell.ai).
 
+[![Demo](https://img.youtube.com/vi/jvTVA7J925Y/maxresdefault.jpg)](https://youtu.be/jvTVA7J925Y)
+
+**[Watch the demo (5 min)](https://youtu.be/jvTVA7J925Y)**
+
 ## What it does
 
 - **Web search** — searches the internet for every query via Tavily
